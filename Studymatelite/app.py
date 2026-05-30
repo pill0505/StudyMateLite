@@ -1,11 +1,18 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="StudyMate Lite", page_icon="📚", layout="wide")
 
+# 한글 깨짐 방지 - 윈도우 기준
+plt.rcParams["font.family"] = "Malgun Gothic"
+plt.rcParams["axes.unicode_minus"] = False
+
+
 def calculate_d_day(exam_date):
     return (exam_date - date.today()).days
+
 
 def urgency_score(d_day):
     if d_day <= 2:
@@ -19,16 +26,19 @@ def urgency_score(d_day):
     else:
         return 1
 
+
 def calculate_priority(difficulty, weakness, d_day):
     urgency = urgency_score(d_day)
     score = weakness * 0.5 + difficulty * 0.3 + urgency * 0.2
     return round(score, 2)
 
+
 if "subjects" not in st.session_state:
     st.session_state.subjects = []
 
+
 st.title("📚 StudyMate Lite")
-st.write("과목별 우선순위/난이도에 따라 공부 시간을 배분해드립니다.")
+st.write("과목별 우선순위와 난이도에 따라 오늘의 공부 시간을 자동으로 배분해드립니다.")
 
 st.divider()
 
@@ -51,11 +61,12 @@ with col1:
         difficulty = st.slider("난이도", 1, 5, 3)
         weakness = st.slider("취약도", 1, 5, 3)
         weak_unit = st.text_input("취약 단원", placeholder="예: 함수, 문법, 독해")
+        subject_color = st.color_picker("그래프 색상 선택", "#4F8BFF")
 
         submitted = st.form_submit_button("과목 추가")
 
         if submitted:
-            if subject == "" or weak_unit == "":
+            if subject.strip() == "" or weak_unit.strip() == "":
                 st.error("과목명과 취약 단원을 입력하세요.")
             else:
                 st.session_state.subjects.append({
@@ -63,13 +74,15 @@ with col1:
                     "시험 날짜": exam_date,
                     "난이도": difficulty,
                     "취약도": weakness,
-                    "취약 단원": weak_unit
+                    "취약 단원": weak_unit,
+                    "색상": subject_color
                 })
                 st.success(f"{subject} 과목이 추가되었습니다.")
 
     if st.button("전체 삭제"):
         st.session_state.subjects = []
         st.success("모든 과목을 삭제했습니다.")
+
 
 with col2:
     st.header("등록된 과목")
@@ -87,10 +100,12 @@ with col2:
                 "시험까지": "D-Day" if d_day == 0 else f"D-{d_day}",
                 "난이도": s["난이도"],
                 "취약도": s["취약도"],
-                "취약 단원": s["취약 단원"]
+                "취약 단원": s["취약 단원"],
+                "색상": s.get("색상", "#4F8BFF")
             })
 
         st.dataframe(pd.DataFrame(table), hide_index=True)
+
 
 st.divider()
 
@@ -110,13 +125,16 @@ else:
             "과목": s["과목"],
             "시험까지": "D-Day" if d_day == 0 else f"D-{d_day}",
             "우선순위 점수": priority,
-            "취약 단원": s["취약 단원"]
+            "취약 단원": s["취약 단원"],
+            "색상": s.get("색상", "#4F8BFF")
         })
 
     total_priority = sum(r["우선순위 점수"] for r in result)
 
     for r in result:
-        r["추천 공부 시간(분)"] = round(total_minutes * r["우선순위 점수"] / total_priority)
+        r["추천 공부 시간(분)"] = round(
+            total_minutes * r["우선순위 점수"] / total_priority
+        )
         r["추천 공부 내용"] = r["취약 단원"] + " 개념 정리 + 문제 풀이"
 
     df = pd.DataFrame(result)
@@ -125,10 +143,27 @@ else:
     st.dataframe(df, hide_index=True)
 
     top = df.iloc[0]
+
     st.success(
         f"오늘 가장 먼저 공부할 과목은 **{top['과목']}**입니다. "
         f"추천 공부 시간은 **{top['추천 공부 시간(분)']}분**입니다."
     )
 
-    chart_df = df[["과목", "추천 공부 시간(분)"]].set_index("과목")
-    st.bar_chart(chart_df)
+    st.subheader("과목별 추천 공부 시간 그래프")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    ax.bar(
+        df["과목"],
+        df["추천 공부 시간(분)"],
+        color=df["색상"].tolist()
+    )
+
+    ax.set_xlabel("과목")
+    ax.set_ylabel("추천 공부 시간(분)")
+    ax.set_title("과목별 추천 공부 시간")
+
+    st.pyplot(fig)
+
+
+
